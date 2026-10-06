@@ -10,9 +10,10 @@
     { id: 'red', name: 'Red', hex: '#d4161c' },
     { id: 'white', name: 'White', hex: '#ffffff' }
   ];
+  var SIZES = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
   var PRODUCTS = [
-    { id: 'shirt', name: 'DWELL T-Shirt', price: 7000 },
-    { id: 'sweatshirt', name: 'DWELL Sweatshirt', price: 9000 },
+    { id: 'shirt', name: 'DWELL T-Shirt', price: 7000, sizes: true },
+    { id: 'sweatshirt', name: 'DWELL Sweatshirt', price: 9000, sizes: true },
     { id: 'tote', name: 'DWELL Tote Bag', price: 7000 },
     { id: 'mug', name: 'DWELL Mug', price: 4494 }
   ];
@@ -32,6 +33,7 @@
     card.dataset.product = p.id;
     card.dataset.color = COLORS[0].id;
     card.dataset.qty = '1';
+    card.dataset.size = '';
     card.innerHTML =
       '<div class="merch-photo"><img src="' + photo(p.id, COLORS[0].id) + '" alt="' + p.name + ' in ' + COLORS[0].name + '" loading="lazy"></div>' +
       '<h4>' + p.name + '</h4>' +
@@ -42,6 +44,9 @@
       }).join('') +
       '</div>' +
       '<div class="merch-colorname">' + COLORS[0].name + '</div>' +
+      (p.sizes ? '<div class="merch-sizes" role="radiogroup" aria-label="Choose a size">' +
+        SIZES.map(function (z) { return '<button type="button" class="size-btn" role="radio" aria-checked="false" data-size="' + z + '">' + z + '</button>'; }).join('') +
+        '</div>' : '') +
       '<div class="merch-actions">' +
       '<div class="qty"><button type="button" class="qty-minus" aria-label="Decrease quantity">&minus;</button><span class="qty-val">1</span><button type="button" class="qty-plus" aria-label="Increase quantity">+</button></div>' +
       '<button type="button" class="merch-add">Add to order</button>' +
@@ -57,7 +62,7 @@
     '<h3>Your order</h3><ul class="merch-lines"></ul>' +
     '<div class="merch-total"><span>Total</span><span class="merch-total-val"></span></div>' +
     '<a class="merch-checkout" target="_blank" rel="noopener">Proceed to order on WhatsApp</a>' +
-    '<p class="merch-note">You’ll be taken to WhatsApp to confirm sizes and delivery, and to make payment.</p>';
+    '<p class="merch-note">You’ll be taken to WhatsApp to confirm delivery and to make payment.</p>';
   root.appendChild(order);
 
   var bar = document.createElement('div');
@@ -72,7 +77,7 @@
     var lines = cart.map(function (l, i) {
       var p = productOf(l.product), c = colorOf(l.color), sub = p.price * l.qty;
       total += sub;
-      return (i + 1) + '. ' + p.name + ' (' + c.name + ') x' + l.qty + ' - ' + money(sub);
+      return (i + 1) + '. ' + p.name + ' (' + c.name + (l.size ? ', Size ' + l.size : '') + ') x' + l.qty + ' - ' + money(sub);
     });
     return 'Hello FOF team! I’d like to order the following merch:\n\n' + lines.join('\n') +
       '\n\nTotal: ' + money(total) + '\n\nPlease send me the payment details so I can complete my order.';
@@ -88,9 +93,9 @@
       var li = document.createElement('li');
       li.innerHTML =
         '<img src="' + photo(l.product, l.color) + '" alt="">' +
-        '<div class="merch-line-info"><strong>' + p.name + '</strong><span>' + c.name + ' · Qty ' + l.qty + '</span></div>' +
+        '<div class="merch-line-info"><strong>' + p.name + '</strong><span>' + c.name + (l.size ? ' · Size ' + l.size : '') + ' · Qty ' + l.qty + '</span></div>' +
         '<div class="merch-line-total">' + money(p.price * l.qty) + '</div>' +
-        '<button type="button" class="merch-remove" data-idx="' + idx + '" aria-label="Remove ' + p.name + ' (' + c.name + ')">×</button>';
+        '<button type="button" class="merch-remove" data-idx="' + idx + '" aria-label="Remove ' + p.name + ' (' + c.name + (l.size ? ', ' + l.size : '') + ')">×</button>';
       list.appendChild(li);
     });
     order.hidden = cart.length === 0;
@@ -130,6 +135,13 @@
       card.querySelector('.merch-colorname').textContent = c.name;
       return;
     }
+    var sz = e.target.closest('.size-btn');
+    if (sz) {
+      card.dataset.size = sz.dataset.size;
+      card.querySelectorAll('.size-btn').forEach(function (b) { b.setAttribute('aria-checked', String(b === sz)); });
+      card.querySelector('.merch-sizes').classList.remove('needs-size');
+      return;
+    }
     var qv = card.querySelector('.qty-val');
     if (e.target.closest('.qty-minus')) {
       card.dataset.qty = String(Math.max(1, +card.dataset.qty - 1)); qv.textContent = card.dataset.qty; return;
@@ -140,8 +152,15 @@
     var add = e.target.closest('.merch-add');
     if (add) {
       var pid = card.dataset.product, cid = card.dataset.color, q = +card.dataset.qty;
-      var existing = cart.filter(function (l) { return l.product === pid && l.color === cid; })[0];
-      if (existing) existing.qty = Math.min(50, existing.qty + q); else cart.push({ product: pid, color: cid, qty: q });
+      var size = card.dataset.size;
+      if (productOf(pid).sizes && !size) {
+        card.querySelector('.merch-sizes').classList.add('needs-size');
+        add.textContent = 'Choose a size';
+        setTimeout(function () { add.textContent = 'Add to order'; }, 1500);
+        return;
+      }
+      var existing = cart.filter(function (l) { return l.product === pid && l.color === cid && l.size === size; })[0];
+      if (existing) existing.qty = Math.min(50, existing.qty + q); else cart.push({ product: pid, color: cid, size: size, qty: q });
       render();
       card.dataset.qty = '1';
       qv.textContent = '1';
